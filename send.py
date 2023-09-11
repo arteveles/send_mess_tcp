@@ -1,6 +1,5 @@
 import asyncio
 from typing import Optional
-from threading import Thread
 
 
 class EchoClientProtocol(asyncio.Protocol):
@@ -10,7 +9,6 @@ class EchoClientProtocol(asyncio.Protocol):
         self._transport: Optional[asyncio.Transport] = None
         self.count = 0
         self.request_count = request_count
-
 
     def connection_made(self, transport: asyncio.Transport):
         self._transport = transport
@@ -29,14 +27,27 @@ class EchoClientProtocol(asyncio.Protocol):
         self.on_con_lost.set_result(True)
 
 
-async def main(count_message):
-    loop = asyncio.get_running_loop()
+async def send_message(file_prefix: int, loop):
     on_con_lost = loop.create_future()
-    for i in range(count_message):
-        with open(f'dev/adviser_tcp_protocol_{i}.bin', 'rb') as file:
-            data = file.read()
-        transport, protocol = await loop.create_connection(lambda: EchoClientProtocol(data, on_con_lost, request_count=2),'0.0.0.0', 5002)
+    with open(
+            f'dev/adviser_tcp_protocol_{file_prefix}.bin', 'rb'
+    ) as file:
+        data = file.read()
+    transport, protocol = await loop.create_connection(
+        lambda: EchoClientProtocol(data, on_con_lost, request_count=2),
+        '127.0.0.1', 5001)
+    try:
+        await on_con_lost
+    finally:
         transport.close()
+
+
+async def main(file_prefix: int):
+    loop = asyncio.get_running_loop()
+    tasks = [send_message(i, loop) for i in range(file_prefix)]
+    await asyncio.gather(*tasks)
+    for task in tasks:
+        task.close()
 
 
 if __name__ == "__main__":
